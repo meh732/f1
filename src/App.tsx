@@ -560,75 +560,73 @@ export default function App() {
 
           {activeTab === 'deploy' && (
             <div className="p-6">
-              <h2 className="text-lg font-bold mb-4 text-blue-800">آموزش ۰ تا ۱۰۰ راه‌اندازی ربات روی هاست سی‌پنل (cPanel) - بدون نیاز به نصب پکیج!</h2>
+              <h2 className="text-lg font-bold mb-4 text-blue-800">آموزش گام‌به‌گام رفع پیام «It works! NodeJS» و اجرای نهایی ربات در سی‌پنل (cPanel)</h2>
               
               <div className="prose prose-blue max-w-none text-gray-700 text-sm leading-relaxed space-y-4">
-                <p className="text-base text-gray-800 font-medium">
-                  به دلیل محدودیت‌های فضای هاست شما (Disk quota exceeded)، ما سیستم را به گونه‌ای ارتقا داده‌ایم که تمامی کتابخانه‌ها (مانند Telegraf و Express و XLSX) در قالب یک فایل پیش‌ساخته‌ی پرسرعت به نام <code className="bg-gray-100 px-1 py-0.5 rounded text-red-600 font-mono">dist/server.cjs</code> بسته‌بندی شده‌اند. 
-                  این یعنی شما نیازی به اجرای دستور <code className="bg-gray-100 px-1.5 py-0.5 rounded text-red-600">NPM Install</code> روی هاست ندارید و با مشکل کمبود حجم مواجه نخواهید شد!
-                </p>
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg">
+                  <h3 className="font-bold text-sm mb-1 flex items-center gap-2">⚠️ چرا پیام «It works! NodeJS» را می‌بینید؟</h3>
+                  <p className="text-xs">
+                    وقتی شما در سی‌پنل یک برنامه NodeJS ایجاد می‌کنید، خود سی‌پنل یک فایل پیش‌فرض به نام <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">app.js</code> در ریشه پوشه می‌سازد که آن صفحه تست آبی‌رنگ را نشان می‌دهد. 
+                    همچنین، وب‌سرور هاست شما (Phusion Passenger) این صفحه را کش می‌کند. برای بالا آمدن سیستم واقعی، باید فایل جدید ما جایگزین آن شده و برنامه ری‌استارت شود.
+                  </p>
+                </div>
 
-                <h3 className="text-md font-bold mt-6 text-gray-900 border-b pb-1">مراحل فوق‌العاده ساده برای اجرا در سی‌پنل:</h3>
+                <h3 className="text-md font-bold mt-6 text-gray-900 border-b pb-1">مراحل ۳ دقیقه‌ای و فوق‌العاده مطمئن برای اجرا:</h3>
                 
                 <div className="space-y-4">
                   <div className="flex gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۱</span>
                     <div>
                       <h4 className="font-bold text-gray-900">دانلود کدهای خروجی (Build) از منو بالا:</h4>
-                      <p className="text-gray-600">ابتدا از منوی سمت راست بالای صفحه گوگل آی اس دیو (Settings یا علامت سه نقطه چرخ‌دنده)، روی گزینه <strong>Export to ZIP</strong> کلیک کنید تا تمام کدهای بهینه‌شده دانلود شوند. فایل زیپ را روی کامپیوتر یا گوشی خود ذخیره کنید.</p>
+                      <p className="text-gray-600">ابتدا از منوی سمت راست بالای همین صفحه (Settings یا آیکون چرخ‌دنده)، روی گزینه <strong>Export to ZIP</strong> کلیک کرده و فایل زیپ پروژه دانلودشده جدید را روی سیستم خود ذخیره کنید. (ما در این نسخه فایل‌های کمکی <code className="bg-gray-100 px-1 rounded font-mono">app.js</code> و <code className="bg-gray-100 px-1 rounded font-mono">index.js</code> را در ریشه قرار داده‌ایم تا همه‌چیز خودکار لود شود).</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۲</span>
                     <div>
-                      <h4 className="font-bold text-gray-900">ساخت برنامه کلاینت در سی‌پنل:</h4>
-                      <p className="text-gray-600">وارد سی‌پنل هاست خود شوید و ابزار <strong>Setup Node.js App</strong> را باز کنید.</p>
-                      <p className="text-gray-600">روی <strong>Create Application</strong> کلیک کرده و تنظیمات را منطبق بر زیر پر کنید:</p>
+                      <h4 className="font-bold text-gray-900">تنظیمات در Setup Node.js App سی‌پنل:</h4>
+                      <p className="text-gray-600">وارد سی‌پنل شوید، بخش <strong>Setup Node.js App</strong> را باز کنید و روی نام برنامه‌ی خود کلیک کنید تا وارد تنظیمات شوید:</p>
                       <ul className="list-disc list-outside ms-6 mt-2 space-y-1 text-gray-600">
-                        <li><strong>Node.js version:</strong> نسخه‌ی ۱۸ (یا بالاتر)</li>
-                        <li><strong>Application mode:</strong> Development یا Production</li>
-                        <li><strong>Application root:</strong> عبارت <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">my-bot</code> را وارد کنید.</li>
-                        <li><strong>Application URL:</strong> آدرس دامنه یا ساب‌دواین مورد نظرتان برای مدیریت (مثلاً <code>bot.yourdomain.com</code>)</li>
-                        <li><strong>Application startup file:</strong> عبارت دقیق <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">dist/server.cjs</code> را بنویسید.</li>
+                        <li><strong>Application root:</strong> این فیلد را به هیچ وجه تغییر ندهید (مثلاً همان <code className="bg-gray-100 px-1 rounded">my-bot</code> بگذارید).</li>
+                        <li><strong>Application startup file:</strong> این فیلد را می‌توانید روی <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">app.js</code> یا <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">dist/server.cjs</code> بگذارید. فرقی نمی‌کند چون ما هر دو حالت را برایتان هوشمندانه پیاده کرده‌ایم!</li>
                       </ul>
-                      <p className="text-gray-600 mt-2">سپس روی دکمه‌ی آبی رنگ <strong>Create</strong> در بالا کلیک کنید تا پوشه ساخته شده و برنامه خام ثبت شود.</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۳</span>
                     <div>
-                      <h4 className="font-bold text-gray-900">آپلود و استخراج فایل‌ها در File Manager:</h4>
-                      <p className="text-gray-600">وارد <strong>File Manager</strong> (مدیر فایل) دایرکتوری سی‌پنل شوید.</p>
-                      <p className="text-gray-600 font-semibold text-amber-700">دقت کنید: داخل پوشه هوم هاست خود، یک پوشه جدید به نام <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-900">my-bot</code> ساخته شده است. وارد آن شوید.</p>
-                      <p className="text-gray-600">فایل زیپی که دانلود کرده بودید را داخل همین پوشه آپلود و سپس روی آن راست کلیک کرده و <strong>Extract</strong> (استخراج) کنید تا کدهای پروژه در اینجا قرار بگیرند.</p>
+                      <h4 className="font-bold text-gray-900">آپلود و استخراج فایل‌ها در File Manager (بسیار مهم):</h4>
+                      <p className="text-gray-600">وارد <strong>File Manager</strong> در سی‌پنل شوید. وارد پوشه‌ای که در ریشه هاست شما ساخته شده (مثلاً <code className="bg-gray-100 px-1 rounded font-mono">my-bot</code>) شوید.</p>
+                      <p className="text-amber-800 font-semibold mb-2">💡 برای جلوگیری از هرگونه تداخل، ابتدا فایل‌های <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">app.js</code> یا <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">index.js</code> قدیمی و ترجیحا هر فایلی که در پوشه هست را کلاً دلیت (حذف) کنید.</p>
+                      <p className="text-gray-600">حالا فایل زیپی که از این پنل دانلود کرده بودید را در همین پوشه آپلود کرده و سپس دکمه <strong>Extract</strong> را بزنید تا جایگزین شود.</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۴</span>
                     <div>
-                      <h4 className="font-bold text-gray-900">راه‌اندازی نهایی ربات (بدون نیاز به دکمه Run NPM Install!):</h4>
-                      <p className="text-gray-600">دوباره به لوکیشن <strong>Setup Node.js App</strong> برگردید و روی نام برنامه خود کلیک کنید.</p>
-                      <p className="text-gray-600">هیچ نیازی به زدن دکمه <strong>Run NPM Install</strong> یا دیسک کوئری ندارید! مستقیماً روی دکمه‌ی <strong>Restart</strong> یا <strong>Start App</strong> بزنید.</p>
-                      <p className="text-gray-600 font-bold text-green-700 mt-1">تبریک! برنامه با سرعت خارق‌العاده روی هاست شما باز خواهد شد.</p>
+                      <h4 className="font-bold text-gray-900">پاکسازی کش و ری‌استارت برنامه:</h4>
+                      <p className="text-gray-600">پس از آپلود و استخراج فایل‌ها، دوباره به بخش <strong>Setup Node.js App</strong> در سی‌پنل بروید.</p>
+                      <p className="text-gray-600">در بالای صفحه، روی دکمه‌ی چرخشی و نارنجی‌رنگ <strong>Restart</strong> (یا دکمه‌ی قرمز رنگ Stop App و سپس Start App) کلیک کنید.</p>
+                      <p className="text-green-700 font-bold mt-1">این کار باعث می‌شود وب‌سرور فایل تست قدیمی را فراموش کرده و ربات پرقدرت شما را بالا بیاورد!</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3 items-start">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۵</span>
                     <div>
-                      <h4 className="font-bold text-gray-900">تنظیم توکن و شناسه ادمین در هاست شما:</h4>
-                      <p className="text-gray-600">تنها کافی است پس از بالا آمدن سایت روی آدرس دامنه خود (Application URL)، آن را در مرورگر باز کنید. صفحه مدیریت ربات (همین پنل) باز می‌شود. وارد تب <strong>تنظیمات ربات</strong> شوید، توکن ربات و شناسه ادمین خود را وارد کرده و دکمه ذخیره را بزنید. ربات بلافاصله به کار می‌افتد!</p>
+                      <h4 className="font-bold text-gray-900">ورود و تنظیمات آسان:</h4>
+                      <p className="text-gray-600">حالا آدرس و دامنه را باز کنید؛ بلافاصله پنل مدیریت زیبای ربات شما لود می‌شود! به تب <strong>تنظیمات ربات</strong> بروید، توکن ربات تلگرام و آیدی عددی ادمین خود را وارد کرده و دکمه ذخیره را بزنید. کار تمام است!</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-8 p-4 bg-teal-50 border border-teal-200 rounded-lg">
-                  <h4 className="font-bold flex items-center gap-2 mb-2 text-teal-900"><Info size={18}/> ویژگی‌های ارتقا یافته‌ی اختصاصی شما</h4>
-                  <p className="text-gray-700">۱. <strong>عدم برخورد با خطای دیسک کوئوت (Disk Quota):</strong> با ساختار جدید بدون فولدر سنگین node_modules ربات شما به سادگی حتی در اقتصادی‌ترین هاست‌ها متصل خواهد ماند.</p>
-                  <p className="text-gray-700 mt-1">۲. <strong>پشتیبان‌گیری (Backup):</strong> از این پس با زدن دستور <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">/backup</code> در گروه یا پی‌وی ادمین، ربات یک فایل اکسل کامل از کالاها و لیست شماره‌ها و یوزرهای ثبت شده به ادمین برمی‌گرداند.</p>
+                  <h4 className="font-bold flex items-center gap-2 mb-2 text-teal-900"><Info size={18}/> ویژگی‌های فوق العاده‌ی پنل و ربات شما</h4>
+                  <p className="text-gray-700">۱. <strong>بای‌پس محدودیت فضا (Disk Quota):</strong> پورتفولیوی کدهای شما بهینه‌سازی و باندل شده است، یعنی نیازی به اجرای "NPM Install" سنگین روی هاست ندارید!</p>
+                  <p className="text-gray-700 mt-1">۲. <strong>دانلود نمونه اکسل آماده:</strong> در بالای بخش کالاها دکمه دانلود نمونه فراهم شد. می‌توانید کالاها را با اکسل یا به صورت کلاً دستی/پنلی بدون اکسل مدیریت کنید.</p>
                 </div>
               </div>
             </div>
