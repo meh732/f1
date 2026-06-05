@@ -293,7 +293,7 @@ app.post("/api/inventory", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV === "development") {
     const vite = await import("vite").then(m => (m as any).createServer({
       server: { middlewareMode: true },
       appType: "spa",
