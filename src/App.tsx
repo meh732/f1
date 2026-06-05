@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Bot, Upload, Settings, List, Save, Play, Square, Server, CheckCircle2, AlertCircle, Info, Users } from 'lucide-react';
+import { Bot, Upload, Settings, List, Save, Play, Square, Server, CheckCircle2, AlertCircle, Info, Users, Plus, Edit, Trash, FileDown } from 'lucide-react';
 import type { AppState, BotConfig, InventoryItem, CustomerRequest } from './types';
 
 export default function App() {
@@ -10,6 +10,12 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // States for manual product entry
+  const [manualCode, setManualCode] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualStock, setManualStock] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     fetchState();
@@ -32,6 +38,109 @@ export default function App() {
   const showMessage = (text: string, type: 'success' | 'error') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 3000);
+  };
+
+  const downloadSampleExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const sheetData = [
+        ["کد", "نام", "موجودی"],
+        ["SH-101", "تیشرت مشکی مردانه", "15"],
+        ["SH-102", "شلوار جین آبی", "5"],
+        ["SH-103", "کفش ورزشی سفید (موجودی صفر یعنی ناموجود)", "0"],
+        ["SH-104", "جوراب نخی (نام اختیاری - بدون موجودی یعنی موجود)", ""]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      XLSX.utils.book_append_sheet(wb, ws, "Inventory_Template");
+      XLSX.writeFile(wb, "Inventory_Sample_Template.xlsx");
+      showMessage('فایل نمونه اکسل با موفقیت دانلود شد', 'success');
+    } catch (err) {
+      showMessage('خطا در ایجاد و دانلود فایل نمونه', 'error');
+    }
+  };
+
+  const handleAddOrUpdateManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualCode.trim()) {
+      showMessage('کد کالا الزامی است', 'error');
+      return;
+    }
+    
+    if (!state) return;
+    
+    const formattedCode = manualCode.trim();
+    const formattedName = manualName.trim() || 'بدون نام';
+    const formattedStock = manualStock.trim() === '' ? 1 : Number(manualStock);
+
+    let updatedInventory = [...(state.inventory || [])];
+    const existingIndex = updatedInventory.findIndex(item => item.code.trim() === formattedCode);
+
+    if (existingIndex !== -1) {
+      // Update existing
+      updatedInventory[existingIndex] = {
+        code: formattedCode,
+        name: formattedName,
+        stock: formattedStock
+      };
+      showMessage('کالا با موفقیت بروزرسانی شد', 'success');
+    } else {
+      // Add new
+      updatedInventory.push({
+        code: formattedCode,
+        name: formattedName,
+        stock: formattedStock
+      });
+      showMessage('کالا جدید با موفقیت اضافه شد', 'success');
+    }
+
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedInventory),
+      });
+      if (res.ok) {
+        setState(prev => prev ? { ...prev, inventory: updatedInventory } : null);
+        setManualCode('');
+        setManualName('');
+        setManualStock('');
+        setIsEditing(false);
+      } else {
+         showMessage('خطا در همگام‌سازی با سرور', 'error');
+      }
+    } catch (err) {
+       showMessage('خطا در ذخیره کالای جدید', 'error');
+    }
+  };
+
+  const handleDeleteItem = async (codeToDelete: string) => {
+    if (!state) return;
+    if (!window.confirm('آیا از حذف این کالا اطمینان دارید؟')) return;
+
+    const updatedInventory = state.inventory.filter(item => item.code !== codeToDelete);
+
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedInventory),
+      });
+      if (res.ok) {
+        setState(prev => prev ? { ...prev, inventory: updatedInventory } : null);
+        showMessage('کالا با موفقیت حذف شد', 'success');
+      } else {
+        showMessage('خطا در بروزرسانی لیست کالاها روی هاست', 'error');
+      }
+    } catch (err) {
+      showMessage('خطا در برقراری ارتباط با سرور', 'error');
+    }
+  };
+
+  const handleSelectForEdit = (item: InventoryItem) => {
+    setManualCode(item.code);
+    setManualName(item.name === 'بدون نام' ? '' : item.name);
+    setManualStock(String(item.stock));
+    setIsEditing(true);
   };
 
   const handleSaveConfig = async () => {
@@ -85,8 +194,8 @@ export default function App() {
         const nameIdx = headers.findIndex(h => h === 'نام' || h === 'name' || h === 'title' || h === 'عنوان');
         const stockIdx = headers.findIndex(h => h === 'موجودی' || h === 'stock' || h === 'qty' || h === 'تعداد');
 
-        if (codeIdx === -1 || stockIdx === -1) {
-          throw new Error("ستون 'کد' یا 'موجودی' در ردیف اول فایل اکسل پیدا نشد.");
+        if (codeIdx === -1) {
+          throw new Error("ستون 'کد' (یا code) در ردیف اول فایل اکسل پیدا نشد.");
         }
 
         const newInventory: InventoryItem[] = [];
@@ -94,10 +203,16 @@ export default function App() {
           const row = data[i];
           if (!row || row.length === 0 || !row[codeIdx]) continue;
           
+          let itemStock = 1;
+          if (stockIdx !== -1 && row[stockIdx] !== undefined && row[stockIdx] !== null && String(row[stockIdx]).trim() !== "") {
+            const numValue = Number(row[stockIdx]);
+            itemStock = isNaN(numValue) ? 0 : numValue;
+          }
+
           newInventory.push({
             code: String(row[codeIdx]).trim(),
-            name: nameIdx !== -1 ? String(row[nameIdx] || 'بدون نام') : 'بدون نام',
-            stock: Number(row[stockIdx]) || 0
+            name: nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام',
+            stock: itemStock
           });
         }
 
@@ -225,7 +340,7 @@ export default function App() {
                     value={config.adminId}
                     onChange={e => setConfig({...config, adminId: e.target.value})}
                     placeholder="12345678"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left font-mono"
                   />
                   <p className="mt-2 text-xs text-gray-500">برای پیدا کردن آیدی عددی خود، از ربات userinfobot@ یا مشابه آن استفاده کنید. پیام‌های درخواست خرید به این آیدی ارسال می‌شود.</p>
                 </div>
@@ -245,25 +360,99 @@ export default function App() {
 
           {activeTab === 'inventory' && (
             <div className="p-0">
-              <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold">مدیریت لیست محصولات</h2>
-                  <p className="text-sm text-gray-500 mt-1">یک فایل اکسل شامل ستون‌های "کد"، "نام" و "موجودی" آپلود کنید.</p>
+                  <p className="text-sm text-gray-500 mt-1">امکان آپلود اکسل و یا مدیریت دستی کالاها وجود دارد (نام و موجودی اختیاری هستند).</p>
                 </div>
                 
-                <div className="relative">
-                  <input 
-                    type="file" 
-                    accept=".xlsx, .xls"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={isUploading}
-                  />
-                  <button className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isUploading ? 'bg-gray-300 text-gray-600' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                    <Upload size={18} />
-                    {isUploading ? 'در حال پردازش...' : 'آپلود فایل اکسل'}
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={downloadSampleExcel}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 transition-colors"
+                  >
+                    <FileDown size={18} />
+                    دانلود فایل نمونه اکسل
                   </button>
+
+                  <div className="relative">
+                    <input 
+                      type="file" 
+                      accept=".xlsx, .xls"
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={isUploading}
+                    />
+                    <button className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isUploading ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                      <Upload size={18} />
+                      {isUploading ? 'در حال پردازش...' : 'آپلود فایل اکسل جدید'}
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              {/* Manual Product Registration Form */}
+              <div className="p-6 border-b border-gray-200 bg-white">
+                <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
+                  {isEditing ? <Edit size={16} className="text-amber-500" /> : <Plus size={16} className="text-blue-500" />}
+                  {isEditing ? 'ویرایش کالا انتخاب شده' : 'ثبت دستی محصول جدید'}
+                </h3>
+                <form onSubmit={handleAddOrUpdateManual} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1 font-medium">کد کالا <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text" 
+                      placeholder="مثال: SH-101"
+                      value={manualCode}
+                      onChange={e => setManualCode(e.target.value)}
+                      disabled={isEditing} // Prevent editing code, to edit delete and re-create.
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono placeholder:font-sans"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1 font-medium">نام کالا (اختیاری)</label>
+                    <input 
+                      type="text" 
+                      placeholder="مثال: تیشرت مشکی" 
+                      value={manualName}
+                      onChange={e => setManualName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1 font-medium">موجودی کالا (اختیاری - خالی یعنی موجود)</label>
+                    <input 
+                      type="number" 
+                      placeholder="مثال: 15" 
+                      value={manualStock}
+                      onChange={e => setManualStock(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      type="submit" 
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg font-medium text-sm text-white transition-colors ${isEditing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700'}`}
+                    >
+                      <Save size={16} />
+                      {isEditing ? 'بروزرسانی کالا' : 'ثبت دستی'}
+                    </button>
+                    {isEditing && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setManualCode('');
+                          setManualName('');
+                          setManualStock('');
+                          setIsEditing(false);
+                        }}
+                        className="py-2 px-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm transition-colors"
+                      >
+                        انصراف
+                      </button>
+                    )}
+                  </div>
+                </form>
               </div>
 
               <div className="overflow-x-auto">
@@ -274,6 +463,7 @@ export default function App() {
                       <th className="px-6 py-3 font-medium">نام کالا</th>
                       <th className="px-6 py-3 font-medium">موجودی</th>
                       <th className="px-6 py-3 font-medium">وضعیت</th>
+                      <th className="px-6 py-3 font-medium text-center">عملیات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-sm">
@@ -289,12 +479,30 @@ export default function App() {
                               : <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200">ناموجود</span>
                             }
                           </td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="inline-flex gap-2">
+                              <button 
+                                onClick={() => handleSelectForEdit(item)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title="ویرایش کالا"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteItem(item.code)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="حذف کالا"
+                              >
+                                <Trash size={16} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                          هیچ کالایی در سیستم ثبت نشده است. لطفاً فایل اکسل خود را آپلود کنید.
+                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                          هیچ کالایی در سیستم ثبت نشده است. کالاها را به صورت دستی ثبت کنید یا فایل اکسل خود را آپلود کنید.
                         </td>
                       </tr>
                     )}
@@ -352,50 +560,75 @@ export default function App() {
 
           {activeTab === 'deploy' && (
             <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">نحوه اجرای ربات روی هاست اشتراکی (cPanel / DirectAdmin)</h2>
+              <h2 className="text-lg font-bold mb-4 text-blue-800">آموزش ۰ تا ۱۰۰ راه‌اندازی ربات روی هاست سی‌پنل (cPanel) - بدون نیاز به نصب پکیج!</h2>
               
-              <div className="prose prose-blue max-w-none text-gray-700 text-sm leading-relaxed">
-                <p className="mb-4 text-base">بر خلاف سایت‌های PHP، ربات‌های نود جی‌اس به امکانات خاصی در هاست نیاز دارند. برای اجرای این ربات در یک هاست اشتراکی (مثل سی‌پنل)، مراحل زیر را دنبال کنید:</p>
+              <div className="prose prose-blue max-w-none text-gray-700 text-sm leading-relaxed space-y-4">
+                <p className="text-base text-gray-800 font-medium">
+                  به دلیل محدودیت‌های فضای هاست شما (Disk quota exceeded)، ما سیستم را به گونه‌ای ارتقا داده‌ایم که تمامی کتابخانه‌ها (مانند Telegraf و Express و XLSX) در قالب یک فایل پیش‌ساخته‌ی پرسرعت به نام <code className="bg-gray-100 px-1 py-0.5 rounded text-red-600 font-mono">dist/server.cjs</code> بسته‌بندی شده‌اند. 
+                  این یعنی شما نیازی به اجرای دستور <code className="bg-gray-100 px-1.5 py-0.5 rounded text-red-600">NPM Install</code> روی هاست ندارید و با مشکل کمبود حجم مواجه نخواهید شد!
+                </p>
+
+                <h3 className="text-md font-bold mt-6 text-gray-900 border-b pb-1">مراحل فوق‌العاده ساده برای اجرا در سی‌پنل:</h3>
                 
-                <h3 className="text-md font-bold mt-6 mb-2 text-gray-900">پیش‌نیاز</h3>
-                <p className="mb-4">هاست شما باید ابزار <strong>Setup Node.js App</strong> (مدیریت NodeJS) را در کنترل‌پنل خود داشته باشد.</p>
+                <div className="space-y-4">
+                  <div className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۱</span>
+                    <div>
+                      <h4 className="font-bold text-gray-900">دانلود کدهای خروجی (Build) از منو بالا:</h4>
+                      <p className="text-gray-600">ابتدا از منوی سمت راست بالای صفحه گوگل آی اس دیو (Settings یا علامت سه نقطه چرخ‌دنده)، روی گزینه <strong>Export to ZIP</strong> کلیک کنید تا تمام کدهای بهینه‌شده دانلود شوند. فایل زیپ را روی کامپیوتر یا گوشی خود ذخیره کنید.</p>
+                    </div>
+                  </div>
 
-                <h3 className="text-md font-bold mt-6 mb-2 text-gray-900">مراحل نصب در سی‌پنل (cPanel)</h3>
-                <ol className="list-decimal list-outside ms-5 space-y-2">
-                  <li>ابتدا این دستور را در پروژه روی سیستم خود (یا در محیط توسعه فعلی) اجرا کنید تا پروژه بیلْد شود:<br/>
-                      <code className="bg-gray-100 px-2 py-0.5 rounded dir-ltr border block mt-1 w-fit">npm run build</code>
-                  </li>
-                  <li>وارد cPanel شوید و بخش <strong>Setup Node.js App</strong> را باز کنید.</li>
-                  <li>روی <strong>Create Application</strong> کلیک کنید.</li>
-                  <li>
-                    تنظیمات را اینگونه وارد کنید:
-                    <ul className="list-disc list-outside ms-4 mt-2 mb-2">
-                      <li><strong>Node.js version:</strong> نسخه‌ی 18 یا بالاتر</li>
-                      <li><strong>Application mode:</strong> Production</li>
-                      <li><strong>Application root:</strong> یک پوشه مانند <code>bot-app</code> ایجاد کرده و مسیر آن را وارد کنید.</li>
-                      <li><strong>Application URL:</strong> آدرس یکی از دامنه‌ها یا ساب‌دامین‌هایتان.</li>
-                      <li><strong>Application startup file:</strong> <code>dist/server.cjs</code></li>
-                    </ul>
-                  </li>
-                  <li>روی دکمه <strong>Create</strong> کلیک کنید.</li>
-                  <li>حالا از طریق <strong>File Manager</strong> در سی‌پنل به پوشه‌ای که روی هاست ساخته‌اید (مثل <code>bot-app</code>) بروید.</li>
-                  <li>فقط این دو فایل/پوشه را از سیستم خود در پوشه‌ی هاست آپلود کنید:
-                    <ul className="list-disc list-outside ms-4 mt-2">
-                      <li>فایل <code>package.json</code></li>
-                      <li>کل محتویات پوشه‌ی <code>dist/</code> (تولید شده توسط دستور build)</li>
-                    </ul>
-                  </li>
-                  <li>در بخش <strong>Setup Node.js App</strong> روی دکمه‌ی <strong>Run NPM Install</strong> کلیک کنید تا متغیرها و کتابخانه‌ها نصب شوند.</li>
-                  <li>در نهایت در همان صفحه روی دکمه‌ی <strong>Start App</strong> یا <strong>Restart</strong> کلیک کنید.</li>
-                  <li className="text-blue-700 bg-blue-50 p-2 rounded">
-                    <strong>نکته مهم:</strong> هر زمان که یک فایل اکسل از جانب ادمین به تلگرام ارسال شود، سیستم اطلاعات را در فایلی به نام <code>bot-data.json</code> در همان مسیر هاست ذخیره می‌کند تا در صورت ری‌استارت شدن هاست، موجودی‌ها صفر نشود.
-                  </li>
-                </ol>
+                  <div className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۲</span>
+                    <div>
+                      <h4 className="font-bold text-gray-900">ساخت برنامه کلاینت در سی‌پنل:</h4>
+                      <p className="text-gray-600">وارد سی‌پنل هاست خود شوید و ابزار <strong>Setup Node.js App</strong> را باز کنید.</p>
+                      <p className="text-gray-600">روی <strong>Create Application</strong> کلیک کرده و تنظیمات را منطبق بر زیر پر کنید:</p>
+                      <ul className="list-disc list-outside ms-6 mt-2 space-y-1 text-gray-600">
+                        <li><strong>Node.js version:</strong> نسخه‌ی ۱۸ (یا بالاتر)</li>
+                        <li><strong>Application mode:</strong> Development یا Production</li>
+                        <li><strong>Application root:</strong> عبارت <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">my-bot</code> را وارد کنید.</li>
+                        <li><strong>Application URL:</strong> آدرس دامنه یا ساب‌دواین مورد نظرتان برای مدیریت (مثلاً <code>bot.yourdomain.com</code>)</li>
+                        <li><strong>Application startup file:</strong> عبارت دقیق <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">dist/server.cjs</code> را بنویسید.</li>
+                      </ul>
+                      <p className="text-gray-600 mt-2">سپس روی دکمه‌ی آبی رنگ <strong>Create</strong> در بالا کلیک کنید تا پوشه ساخته شده و برنامه خام ثبت شود.</p>
+                    </div>
+                  </div>
 
-                <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-bold flex items-center gap-2 mb-2 text-blue-900"><Info size={18}/> نحوه کارکرد ربات</h4>
-                  <p>ربات بصورت خودکار تمامی پیام‌های ارسالی کاربران در گروه‌هایی که عضو آن است را می‌خواند. اگر پیامی حاوی کلمه‌ای باشد که دقیقا با «کد کالا» یکی از محصولات شما تطابق داشته باشد (و آن کالا در اکسل موجودی بیشتر از ۰ داشته باشد)، ربات فورا پیامی به آیدی خصوصی شما می‌فرستد.</p>
-                  <p className="mt-2 text-green-700 font-bold border-t border-blue-200 pt-2">آپدیت جدید: حالا ادمین می‌تواند فایل اکسل موجودی را در پی‌وی (Private Chat) ربات ارسال کند و ربات بلافاصله موجودی اجناس را به‌روز خواهد کرد.</p>
+                  <div className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۳</span>
+                    <div>
+                      <h4 className="font-bold text-gray-900">آپلود و استخراج فایل‌ها در File Manager:</h4>
+                      <p className="text-gray-600">وارد <strong>File Manager</strong> (مدیر فایل) دایرکتوری سی‌پنل شوید.</p>
+                      <p className="text-gray-600 font-semibold text-amber-700">دقت کنید: داخل پوشه هوم هاست خود، یک پوشه جدید به نام <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-900">my-bot</code> ساخته شده است. وارد آن شوید.</p>
+                      <p className="text-gray-600">فایل زیپی که دانلود کرده بودید را داخل همین پوشه آپلود و سپس روی آن راست کلیک کرده و <strong>Extract</strong> (استخراج) کنید تا کدهای پروژه در اینجا قرار بگیرند.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۴</span>
+                    <div>
+                      <h4 className="font-bold text-gray-900">راه‌اندازی نهایی ربات (بدون نیاز به دکمه Run NPM Install!):</h4>
+                      <p className="text-gray-600">دوباره به لوکیشن <strong>Setup Node.js App</strong> برگردید و روی نام برنامه خود کلیک کنید.</p>
+                      <p className="text-gray-600">هیچ نیازی به زدن دکمه <strong>Run NPM Install</strong> یا دیسک کوئری ندارید! مستقیماً روی دکمه‌ی <strong>Restart</strong> یا <strong>Start App</strong> بزنید.</p>
+                      <p className="text-gray-600 font-bold text-green-700 mt-1">تبریک! برنامه با سرعت خارق‌العاده روی هاست شما باز خواهد شد.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 items-start">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۵</span>
+                    <div>
+                      <h4 className="font-bold text-gray-900">تنظیم توکن و شناسه ادمین در هاست شما:</h4>
+                      <p className="text-gray-600">تنها کافی است پس از بالا آمدن سایت روی آدرس دامنه خود (Application URL)، آن را در مرورگر باز کنید. صفحه مدیریت ربات (همین پنل) باز می‌شود. وارد تب <strong>تنظیمات ربات</strong> شوید، توکن ربات و شناسه ادمین خود را وارد کرده و دکمه ذخیره را بزنید. ربات بلافاصله به کار می‌افتد!</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 p-4 bg-teal-50 border border-teal-200 rounded-lg">
+                  <h4 className="font-bold flex items-center gap-2 mb-2 text-teal-900"><Info size={18}/> ویژگی‌های ارتقا یافته‌ی اختصاصی شما</h4>
+                  <p className="text-gray-700">۱. <strong>عدم برخورد با خطای دیسک کوئوت (Disk Quota):</strong> با ساختار جدید بدون فولدر سنگین node_modules ربات شما به سادگی حتی در اقتصادی‌ترین هاست‌ها متصل خواهد ماند.</p>
+                  <p className="text-gray-700 mt-1">۲. <strong>پشتیبان‌گیری (Backup):</strong> از این پس با زدن دستور <code className="bg-gray-100 px-1 py-0.5 rounded font-mono">/backup</code> در گروه یا پی‌وی ادمین، ربات یک فایل اکسل کامل از کالاها و لیست شماره‌ها و یوزرهای ثبت شده به ادمین برمی‌گرداند.</p>
                 </div>
               </div>
             </div>

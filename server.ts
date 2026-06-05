@@ -31,7 +31,7 @@ interface AppState {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "50mb" }));
 
@@ -137,8 +137,8 @@ async function startBot() {
               const nameIdx = headers.findIndex((h: string) => h === 'نام' || h === 'name' || h === 'title' || h === 'عنوان');
               const stockIdx = headers.findIndex((h: string) => h === 'موجودی' || h === 'stock' || h === 'qty' || h === 'تعداد');
 
-              if (codeIdx === -1 || stockIdx === -1) {
-                return ctx.reply("❌ ستون 'کد' یا 'موجودی' در ردیف اول فایل اکسل پیدا نشد.");
+              if (codeIdx === -1) {
+                return ctx.reply("❌ ستون 'کد' (یا code) در ردیف اول فایل اکسل پیدا نشد.");
               }
 
               const newInventory: InventoryItem[] = [];
@@ -146,10 +146,17 @@ async function startBot() {
                 const row = data[i];
                 if (!row || row.length === 0 || !row[codeIdx]) continue;
                 
+                // If stock column/value is missing, default it to 1 so the item is in-stock by default.
+                let itemStock = 1;
+                if (stockIdx !== -1 && row[stockIdx] !== undefined && row[stockIdx] !== null && String(row[stockIdx]).trim() !== "") {
+                  const numValue = Number(row[stockIdx]);
+                  itemStock = isNaN(numValue) ? 0 : numValue;
+                }
+
                 newInventory.push({
                   code: String(row[codeIdx]).trim(),
-                  name: nameIdx !== -1 ? String(row[nameIdx] || 'بدون نام') : 'بدون نام',
-                  stock: Number(row[stockIdx]) || 0
+                  name: nameIdx !== -1 && row[nameIdx] ? String(row[nameIdx]).trim() : 'بدون نام',
+                  stock: itemStock
                 });
               }
 
@@ -288,9 +295,7 @@ app.post("/api/inventory", (req, res) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const { createViteServer } = await import("vite").then(m => m.default ? { createViteServer: m.createServer } : m);
-    // actually already imported from vite
-    const vite = await import("vite").then(m => m.createServer({
+    const vite = await import("vite").then(m => (m as any).createServer({
       server: { middlewareMode: true },
       appType: "spa",
     }));
