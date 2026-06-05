@@ -599,8 +599,16 @@ export default function App() {
                     <div>
                       <h4 className="font-bold text-gray-900">آپلود و استخراج فایل‌ها در File Manager (بسیار مهم):</h4>
                       <p className="text-gray-600">وارد <strong>File Manager</strong> در سی‌پنل شوید. وارد پوشه‌ای که در ریشه هاست شما ساخته شده (مثلاً <code className="bg-gray-100 px-1 rounded font-mono">my-bot</code>) شوید.</p>
-                      <p className="text-amber-800 font-semibold mb-2">💡 برای جلوگیری از هرگونه تداخل، ابتدا فایل‌های <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">app.js</code> یا <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">index.js</code> قدیمی و ترجیحا هر فایلی که در پوشه هست را کلاً دلیت (حذف) کنید.</p>
-                      <p className="text-gray-600">حالا فایل زیپی که از این پنل دانلود کرده بودید را در همین پوشه آپلود کرده و سپس دکمه <strong>Extract</strong> را بزنید تا جایگزین شود.</p>
+                      <p className="text-amber-800 font-semibold mb-2">💡 بسیار مهم: تمام فایل‌های قبلی (خصوصاً فایل‌های مربوط به پروژه قبلی یا فایل تست <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">app.js</code> قدیمی) را از این پوشه کاملاً پاک کنید تا پوشه کاملاً خالی شود.</p>
+                      <p className="text-gray-600">حالا فایل زیپ دانلود شده از طریق دکمه <strong>Export to ZIP</strong> را در این پوشه آپلود و <strong>Extract</strong> کنید.</p>
+                      <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded mt-2">
+                        <p className="text-xs font-bold">⚠️ توجه ویژه هنگام استخراج (Extract):</p>
+                        <p className="text-xs mt-1">
+                          اگر پس از استخراج، فایل‌ها در یک زیرپوشه (مثلاً به نام <code className="bg-blue-100 px-1 rounded font-mono">react-example</code> یا نامی مشابه) قرار گرفتند، 
+                          <strong>باید حتماً وارد آن زیرپوشه شوید، همه فایل‌ها و فولدرها (مخصوصاً پوشه <code className="bg-blue-100 px-1 rounded font-mono">dist</code>، فایل‌های <code className="bg-blue-100 px-1 rounded font-mono">app.js</code>، <code className="bg-blue-100 px-1 rounded font-mono">index.js</code> و <code className="bg-blue-100 px-1 rounded font-mono">package.json</code>) را انتخاب کرده، دکمه Move را بزنید و مسیر انتقال را مستقیماً به پوشه اصلی برنامه یعنی <code className="bg-blue-100 px-1 rounded font-mono">/my-bot</code> تغییر دهید.</strong>
+                          هیچ فایلی نباید داخل زیرپوشه بماند؛ همه‌چیز باید مستقیماً در پوشه‌ی ریشه <code className="bg-blue-100 px-1 rounded font-mono">my-bot</code> قرار بگیرند.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
