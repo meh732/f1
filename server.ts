@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import { Telegraf } from "telegraf";
 import * as XLSX from "xlsx";
 
@@ -31,7 +30,7 @@ interface AppState {
 }
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: "50mb" }));
 
@@ -309,9 +308,18 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (typeof PORT === "string" && (PORT.startsWith("/") || PORT.startsWith("\\") || !/^\d+$/.test(PORT))) {
+    // Unix domain socket for cPanel / Phusion Passenger (or named socket)
+    app.listen(PORT, () => {
+      console.log(`Server running on Unix socket: ${PORT}`);
+    });
+  } else {
+    // Standard TCP port
+    const numericPort = Number(PORT) || 3000;
+    app.listen(numericPort, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${numericPort}`);
+    });
+  }
 }
 
 startServer();
