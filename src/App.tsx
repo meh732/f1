@@ -563,6 +563,32 @@ export default function App() {
               <h2 className="text-lg font-bold mb-4 text-blue-800">آموزش گام‌به‌گام رفع پیام «It works! NodeJS» و اجرای نهایی ربات در سی‌پنل (cPanel)</h2>
               
               <div className="prose prose-blue max-w-none text-gray-700 text-sm leading-relaxed space-y-4">
+                {/* دانلود فایل زیپ بیلد مستقیم مخصوص هاست اشتراکی */}
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-5 rounded-xl shadow-md border border-teal-400 mb-6 relative overflow-hidden">
+                  <div className="relative z-10">
+                    <h3 className="font-bold text-lg mb-2 flex items-center gap-2 text-white">
+                      🚀 راه حل طلایی برای هاست ۱ گیگابایتی (بدون نیاز به نصب پکیج یا بیلد گرفتن روی هاست!)
+                    </h3>
+                    <p className="text-sm opacity-90 leading-relaxed">
+                      به علت محدودیت شدید رم (RAM) در هاست‌های اشتراکی سی‌پنل، اجرای کدهای بیلد یا نصب سنگین پکیج‌ها با خطای <code className="bg-teal-700 px-1.5 py-0.5 rounded text-white font-mono text-xs font-bold">Out of memory</code> مواجه می‌شود.
+                      <br />
+                      ما برای شما کل پروژه را <strong>همینجا در سرورهای قدرتمند AI Studio کامپایل و تمام وابستگی‌ها (حتی کتابخانه Telegraf و اکسل) را در یک تک‌فایل مستقل باندل کرده‌ایم!</strong> یعنی شما به هیچ وجه نیازی ندارید روی هاست دکمه Run NPM Install یا Run Build بزنید!
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <a 
+                        href="/api/download-deploy" 
+                        download
+                        className="bg-white text-teal-800 hover:bg-teal-50 transition-all font-bold px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 text-sm inline-flex items-center"
+                      >
+                        📥 دانلود فایل زیپ آماده هاست (cpanel-deploy.zip)
+                      </a>
+                    </div>
+                  </div>
+                  <div className="absolute right-[-20px] bottom-[-25px] opacity-10 pointer-events-none">
+                    <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                  </div>
+                </div>
+
                 <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg">
                   <h3 className="font-bold text-sm mb-1 flex items-center gap-2">⚠️ چرا پیام «It works! NodeJS» را می‌بینید؟</h3>
                   <p className="text-xs">

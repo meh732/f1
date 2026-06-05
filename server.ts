@@ -260,6 +260,15 @@ app.get("/api/state", (req, res) => {
   });
 });
 
+app.get("/api/download-deploy", (req, res) => {
+  const filePath = path.join(process.cwd(), "dist", "cpanel-deploy.zip");
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, "cpanel-deploy.zip");
+  } else {
+    res.status(404).send("فایل زیپ بیلد هنوز ساخته نشده است. لطفا ابتدا پروژه را در AI Studio بیلد کنید.");
+  }
+});
+
 app.post("/api/config", async (req, res) => {
   state.config = req.body;
   saveState();
