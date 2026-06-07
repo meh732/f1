@@ -41,6 +41,11 @@ try {
   // Add the built dist folder (excluding any previously prepared zip to prevent recursive nesting)
   // We will write the zip later
   const tempZipPath = path.join(process.cwd(), 'cpanel-deploy.zip');
+  const finalZipPath = path.join(process.cwd(), 'dist', 'cpanel-deploy.zip');
+
+  if (fs.existsSync(finalZipPath)) {
+    fs.unlinkSync(finalZipPath);
+  }
   
   if (fs.existsSync('dist')) {
     zip.addLocalFolder('dist', 'dist');
@@ -57,7 +62,6 @@ try {
   zip.writeZip(tempZipPath);
 
   // Move ZIP inside dist so it can be served stably by Express
-  const finalZipPath = path.join(process.cwd(), 'dist', 'cpanel-deploy.zip');
   fs.renameSync(tempZipPath, finalZipPath);
 
   console.log('✅ Build and packaging completed successfully inside AI Studio! Ready for Export.');

@@ -5,8 +5,14 @@ import type { AppState, BotConfig, InventoryItem, CustomerRequest } from './type
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'settings' | 'inventory' | 'customers' | 'deploy'>('settings');
-  const [state, setState] = useState<AppState | null>(null);
-  const [config, setConfig] = useState<BotConfig>({ token: '', adminId: '' });
+  const [state, setState] = useState<AppState>({
+    config: { token: '', adminId: '', groupId: '', customerMessage: '', groupAccess: 'all' },
+    inventory: [],
+    customers: [],
+    isRunning: false,
+    groups: []
+  });
+  const [config, setConfig] = useState<BotConfig>({ token: '', adminId: '', groupId: '', customerMessage: '', groupAccess: 'all', botEnabled: true, disableCustomerPm: false });
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -26,7 +32,15 @@ export default function App() {
       const res = await fetch('/api/state');
       const data: AppState = await res.json();
       setState(data);
-      setConfig(data.config);
+      setConfig({
+        token: data.config?.token || '',
+        adminId: data.config?.adminId || '',
+        groupId: data.config?.groupId || '',
+        customerMessage: data.config?.customerMessage || '',
+        groupAccess: data.config?.groupAccess || 'all',
+        botEnabled: data.config?.botEnabled !== false,
+        disableCustomerPm: !!data.config?.disableCustomerPm
+      });
     } catch (err) {
       console.error(err);
       showMessage('خطا در دریافت اطلاعات از سرور', 'error');
@@ -73,7 +87,7 @@ export default function App() {
     const formattedStock = manualStock.trim() === '' ? 1 : Number(manualStock);
 
     let updatedInventory = [...(state.inventory || [])];
-    const existingIndex = updatedInventory.findIndex(item => item.code.trim() === formattedCode);
+    const existingIndex = updatedInventory.findIndex(item => String(item.code || '').trim().toLowerCase() === formattedCode.toLowerCase());
 
     if (existingIndex !== -1) {
       // Update existing
@@ -100,7 +114,7 @@ export default function App() {
         body: JSON.stringify(updatedInventory),
       });
       if (res.ok) {
-        setState(prev => prev ? { ...prev, inventory: updatedInventory } : null);
+        setState(prev => ({ ...prev, inventory: updatedInventory }));
         setManualCode('');
         setManualName('');
         setManualStock('');
@@ -117,7 +131,7 @@ export default function App() {
     if (!state) return;
     if (!window.confirm('آیا از حذف این کالا اطمینان دارید؟')) return;
 
-    const updatedInventory = state.inventory.filter(item => item.code !== codeToDelete);
+    const updatedInventory = (state.inventory || []).filter(item => String(item.code || '').trim().toLowerCase() !== String(codeToDelete || '').trim().toLowerCase());
 
     try {
       const res = await fetch('/api/inventory', {
@@ -126,7 +140,7 @@ export default function App() {
         body: JSON.stringify(updatedInventory),
       });
       if (res.ok) {
-        setState(prev => prev ? { ...prev, inventory: updatedInventory } : null);
+        setState(prev => ({ ...prev, inventory: updatedInventory }));
         showMessage('کالا با موفقیت حذف شد', 'success');
       } else {
         showMessage('خطا در بروزرسانی لیست کالاها روی هاست', 'error');
@@ -137,7 +151,7 @@ export default function App() {
   };
 
   const handleSelectForEdit = (item: InventoryItem) => {
-    setManualCode(item.code);
+    setManualCode(String(item.code || ''));
     setManualName(item.name === 'بدون نام' ? '' : item.name);
     setManualStock(String(item.stock));
     setIsEditing(true);
@@ -216,6 +230,7 @@ export default function App() {
           });
         }
 
+        // Replace the inventory completely with the parsed excel file
         const res = await fetch('/api/inventory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -223,8 +238,8 @@ export default function App() {
         });
         
         if (res.ok) {
-          setState(prev => prev ? { ...prev, inventory: newInventory } : null);
-          showMessage(`تعداد ${newInventory.length} کالا با موفقیت بروزرسانی شد`, 'success');
+          setState(prev => prev ? ({ ...prev, inventory: newInventory }) : null);
+          showMessage(`موجودی انبار با موفقیت با اکسل جایگزین شد! ${newInventory.length} قلم کالا ذخیره گردید.`, 'success');
         } else {
           throw new Error("خطا در ذخیره در سرور");
         }
@@ -257,7 +272,7 @@ export default function App() {
               <Bot size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold">دستیار تلگرامی موجودی کالا</h1>
+              <h1 className="text-xl font-bold">پنل ربات دستیار MEH tel:@mohammadeh7</h1>
               <span className={`text-sm flex items-center gap-1 mt-1 ${state?.isRunning ? 'text-green-600' : 'text-red-500'}`}>
                 {state?.isRunning ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
                 {state?.isRunning ? 'ربات در حال اجرا است' : 'ربات خاموش است'}
@@ -295,7 +310,6 @@ export default function App() {
             { id: 'settings', icon: Settings, label: 'تنظیمات ربات' },
             { id: 'inventory', icon: List, label: 'موجودی کالاها' },
             { id: 'customers', icon: Users, label: 'مشتریان' },
-            { id: 'deploy', icon: Server, label: 'آموزش راه‌اندازی' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -318,37 +332,175 @@ export default function App() {
           
           {activeTab === 'settings' && (
             <div className="p-6">
-              <h2 className="text-lg font-bold mb-6">پیکربندی حساب تلگرام</h2>
-              
-              <div className="space-y-6 max-w-lg">
+              {/* Bot status card */}
+              <div className="mb-8 bg-gray-50 border border-gray-200 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">توکن ربات (Bot Token)</label>
-                  <input 
-                    type="password"
-                    value={config.token}
-                    onChange={e => setConfig({...config, token: e.target.value})}
-                    placeholder="1234567890:AAH..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left dir-ltr"
-                  />
-                  <p className="mt-2 text-xs text-gray-500">این توکن را از BotFather@ در تلگرام دریافت کنید.</p>
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <span className={`w-3 h-3 rounded-full animate-pulse ${state?.isRunning ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    وضعیت فعلی ربات تلگرام
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {state?.isRunning 
+                      ? 'ربات متصل است و در گروه‌ها پیام‌ها را به دنبال کدهای تعریف شده اسکن می‌کند.' 
+                      : 'ربات غیرفعال است و اسکن کد کالاها متوقف شده است.'}
+                  </p>
+                </div>
+                <div>
+                  <div className="flex gap-3 items-center">
+                    <button 
+                      onClick={toggleBot}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white shadow-sm transition-all
+                        ${state?.isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}
+                      `}
+                    >
+                      {state?.isRunning ? <Square size={16} className="fill-current" /> : <Play size={16} className="fill-current" />}
+                      {state?.isRunning ? 'خاموش کردن / غیرفعال‌سازی ربات' : 'روشن کردن / فعال‌سازی ربات'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="text-lg font-bold mb-6 text-gray-800">تنظیمات و پیکربندی ربات</h2>
+              
+              <div className="space-y-6 max-w-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">توکن ربات (Bot Token)</label>
+                    <input 
+                      type="password"
+                      value={config.token}
+                      onChange={e => setConfig({...config, token: e.target.value})}
+                      placeholder="1234567890:AAH..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left dir-ltr"
+                    />
+                    <p className="mt-2 text-xs text-gray-500">این توکن را از BotFather@ در تلگرام دریافت کنید.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">آیدی عددی مدیر (Admin Chat ID)</label>
+                    <input 
+                      type="text"
+                      value={config.adminId}
+                      onChange={e => setConfig({...config, adminId: e.target.value})}
+                      placeholder="12345678"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left font-mono"
+                    />
+                    <p className="mt-2 text-xs text-gray-500">برای پیدا کردن آیدی خود، از ربات userinfobot@ استفاده کنید. درخواست سفارشات به این آیدی ارسال می‌شود.</p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">آیدی عددی مدیر (Admin Chat ID)</label>
+                <div className="border-t border-gray-100 pt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">آیدی گروه هدف جهت اسکن (Telegram Group ID / Username) <span className="text-gray-400 text-xs font-normal">(اختیاری)</span></label>
                   <input 
                     type="text"
-                    value={config.adminId}
-                    onChange={e => setConfig({...config, adminId: e.target.value})}
-                    placeholder="12345678"
+                    value={config.groupId || ''}
+                    onChange={e => setConfig({...config, groupId: e.target.value})}
+                    placeholder="مثال: -100123456789 یا my_group_username"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left font-mono"
                   />
-                  <p className="mt-2 text-xs text-gray-500">برای پیدا کردن آیدی عددی خود، از ربات userinfobot@ یا مشابه آن استفاده کنید. پیام‌های درخواست خرید به این آیدی ارسال می‌شود.</p>
+                  <p className="mt-2 text-xs text-gray-500">اگر می‌خواهید اسکن کد فقط به یک گروه خاص محدود شود، آیدی عددی (شروع با ۱۰۰-) یا یوزرنیم گروه را بنویسید. در صورت خالی بودن، ربات مستقیماً تمام گروه‌هایی را که در آن‌ها عضو است اسکن می‌کند.</p>
+                  
+                  {/* Step-by-Step Helper Guide removed */}
+
+                  {/* Discovered Groups Helper list */}
+                  {state.groups && state.groups.length > 0 && (
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <span className="font-bold text-blue-800 text-sm block mb-3 flex items-center gap-1.5">
+                        <Users size={16} />
+                        گروه‌های شناسایی‌شده خودکار (کافیست کلیک کنید):
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {state.groups.map(g => (
+                          <div key={g.id} className="flex items-center justify-between bg-white px-3 py-2.5 rounded-lg border border-blue-100 shadow-xs">
+                            <div className="overflow-hidden">
+                              <span className="font-bold text-gray-800 text-sm block truncate">{g.title}</span>
+                              <span className="text-xs text-mono text-gray-500 font-mono truncate block mt-0.5" dir="ltr">{g.id}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfig(prev => ({ ...prev, groupId: g.id }));
+                                showMessage(`گروه «${g.title}» انتخاب شد. لطفاً دکمه ذخیره تنظیمات را بزنید.`, 'success');
+                              }}
+                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2.5 rounded transition-all cursor-pointer select-none"
+                            >
+                              انتخاب
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="pt-4 border-t border-gray-100">
+                <div className="border-t border-gray-100 pt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">محدودیت و امنیت دسترسی در گروه‌ها</label>
+                  <select 
+                    value={config.groupAccess || 'all'}
+                    onChange={e => setConfig({...config, groupAccess: e.target.value as any})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all text-sm"
+                  >
+                    <option value="all">🌐 همه اعضا (هر کسی در گروه پیام حاوی کد معتبر بفرستد، اسکن و ثبت شود)</option>
+                    <option value="group_admins">👮 فقط ادمین‌های گروه (فقط مدیران و ادمین‌های گروه بتوانند کالاها را در گروه اسکن کنند)</option>
+                    <option value="admin">🔒 فقط مدیر ربات (فقط شما به عنوان مدیر کل ربات بتوانید با ارسال کد در داخل گروه اسکن را تریگر کنید)</option>
+                  </select>
+                  <p className="mt-2 text-xs text-gray-500">برای برطرف کردن نگرانی دسترسی بقیه افراد گروه به ربات، می‌توانید دسترسی را محدود به ادمین‌های گروه یا فقط حساب خودتان (مدیر کل) نمایید.</p>
+                </div>
+
+                <div className="border-t border-gray-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <input 
+                      type="checkbox"
+                      id="botEnabled"
+                      checked={config.botEnabled !== false}
+                      onChange={e => setConfig({...config, botEnabled: e.target.checked})}
+                      className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="botEnabled" className="block text-sm font-bold text-gray-800 cursor-pointer">
+                        🟢 پایش و اسکن هوشمند فعال باشد
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        در صورت غیرفعال بودن این گزینه، ربات اسکن کدهای خرید را موقتاً متوقف می‌کند.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <input 
+                      type="checkbox"
+                      id="disableCustomerPm"
+                      checked={!!config.disableCustomerPm}
+                      onChange={e => setConfig({...config, disableCustomerPm: e.target.checked})}
+                      className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div>
+                      <label htmlFor="disableCustomerPm" className="block text-sm font-bold text-gray-800 cursor-pointer">
+                        📴 غیرفعال کردن پیام به خریدار
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        با فعال کردن این گزینه، پس از سفارش هیچ پیامی به مشتری فرستاده نمی‌شود و سفارش خریدار مستقیماً و مخفیانه فقط در پی‌وی شما (ادمین) ثبت می‌گردد.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">متن اطلاعات ارسالی در پی‌وی مشتری (Customer PV Message Template)</label>
+                  <textarea 
+                    value={config.customerMessage || ''}
+                    onChange={e => setConfig({...config, customerMessage: e.target.value})}
+                    placeholder="نمونه: سلام! درخواست شما برای خرید {name} با کد {code} ثبت شد. به زودی در خدمتتان هستیم."
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-right text-sm leading-relaxed"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">شما می‌توانید از متغیرهای <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-blue-600">{`{code}`}</code> برای کد کالا و <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-blue-600">{`{name}`}</code> برای نام کالا استفاده کنید تا اطلاعات به صورت خودکار جایگذاری شوند.</p>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                   <button 
                     onClick={handleSaveConfig}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold transition-all shadow-sm"
                   >
                     <Save size={18} />
                     ذخیره تنظیمات
@@ -359,22 +511,47 @@ export default function App() {
           )}
 
           {activeTab === 'inventory' && (
-            <div className="p-0">
-              <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold">مدیریت لیست محصولات</h2>
-                  <p className="text-sm text-gray-500 mt-1">امکان آپلود اکسل و یا مدیریت دستی کالاها وجود دارد (نام و موجودی اختیاری هستند).</p>
-                </div>
+            <div className="p-6 space-y-8">
+              {/* Main title */}
+              <div className="border-b border-gray-100 pb-4">
+                <h2 className="text-xl font-bold text-gray-800">مدیریت لیست محصولات انبار</h2>
+                <p className="text-sm text-gray-500 mt-1">با استفاده از ابزارهای زیر، کالاها و لیست انبار ربات را بارگذاری، بروزرسانی و مدیریت کنید.</p>
+              </div>
+
+              {/* Three Separate Administrative Panels */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                <div className="flex flex-wrap gap-2">
+                {/* Panel A: Download Template Excel */}
+                <div className="p-6 bg-teal-50/50 border border-teal-200 rounded-xl shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-teal-800 font-bold mb-2">
+                      <FileDown size={20} />
+                      <h4>۱. دانلود فایل پیش‌فرض نمونه اکسل</h4>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                      جهت تعریف کالاها به صورت دسته‌جمعی، ابتدا این قالب اکسل نمونه را دانلود نمایید و اطلاعات کالاها را در ستون‌های تنظیم‌شده وارد کنید.
+                    </p>
+                  </div>
                   <button 
                     onClick={downloadSampleExcel}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-sm text-sm transition-all"
                   >
                     <FileDown size={18} />
-                    دانلود فایل نمونه اکسل
+                    دانلود فایل نمونه اکسل (xlsx)
                   </button>
+                </div>
 
+                {/* Panel B: Upload Excel File */}
+                <div className="p-6 bg-blue-50/50 border border-blue-200 rounded-xl shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-blue-800 font-bold mb-2">
+                      <Upload size={20} />
+                      <h4>۲. آپلود لیست کالاها از فایل اکسل</h4>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                      یک فایل اکسل پر شده آپلود کنید. لیست تمام موجودی‌های قبلی ربات با محصولات فایل جدید جایگزین شده و بلافاصله آماده اسکن می‌شود.
+                    </p>
+                  </div>
                   <div className="relative">
                     <input 
                       type="file" 
@@ -383,34 +560,36 @@ export default function App() {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       disabled={isUploading}
                     />
-                    <button className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isUploading ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                    <button className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-sm transition-all shadow-sm ${isUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
                       <Upload size={18} />
-                      {isUploading ? 'در حال پردازش...' : 'آپلود فایل اکسل جدید'}
+                      {isUploading ? 'در حال پردازش فایل...' : 'آپلود فایل اکسل محصولات'}
                     </button>
                   </div>
                 </div>
+
               </div>
 
-              {/* Manual Product Registration Form */}
-              <div className="p-6 border-b border-gray-200 bg-white">
-                <h3 className="font-bold text-sm text-gray-800 mb-3 flex items-center gap-2">
-                  {isEditing ? <Edit size={16} className="text-amber-500" /> : <Plus size={16} className="text-blue-500" />}
-                  {isEditing ? 'ویرایش کالا انتخاب شده' : 'ثبت دستی محصول جدید'}
-                </h3>
-                <form onSubmit={handleAddOrUpdateManual} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+              {/* Panel C: Manual Product Registration Form (Separate section) */}
+              <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="flex items-center gap-2 text-blue-600 font-bold mb-4 border-b border-gray-100 pb-3">
+                  {isEditing ? <Edit size={20} className="text-amber-500" /> : <Plus size={20} />}
+                  <h4>۳. {isEditing ? 'ویرایش اطلاعات کالا' : 'افزودن و ثبت دستی کالا'}</h4>
+                </div>
+                
+                <form onSubmit={handleAddOrUpdateManual} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1 font-medium">کد کالا <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">کد کالا <span className="text-red-500">*</span></label>
                     <input 
                       type="text" 
                       placeholder="مثال: SH-101"
                       value={manualCode}
                       onChange={e => setManualCode(e.target.value)}
-                      disabled={isEditing} // Prevent editing code, to edit delete and re-create.
+                      disabled={isEditing}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono placeholder:font-sans"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1 font-medium">نام کالا (اختیاری)</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">نام کالا (اختیاری)</label>
                     <input 
                       type="text" 
                       placeholder="مثال: تیشرت مشکی" 
@@ -420,7 +599,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1 font-medium">موجودی کالا (اختیاری - خالی یعنی موجود)</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">موجودی کالا (عدد - خالی یعنی ۱ کالا)</label>
                     <input 
                       type="number" 
                       placeholder="مثال: 15" 
@@ -432,10 +611,10 @@ export default function App() {
                   <div className="flex gap-2">
                     <button 
                       type="submit" 
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg font-medium text-sm text-white transition-colors ${isEditing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700'}`}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg font-bold text-sm text-white transition-all shadow-sm ${isEditing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700'}`}
                     >
                       <Save size={16} />
-                      {isEditing ? 'بروزرسانی کالا' : 'ثبت دستی'}
+                      {isEditing ? 'بروزرسانی کالا' : 'ثبت کالا'}
                     </button>
                     {isEditing && (
                       <button 
@@ -446,7 +625,7 @@ export default function App() {
                           setManualStock('');
                           setIsEditing(false);
                         }}
-                        className="py-2 px-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm transition-colors"
+                        className="py-2 px-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm transition-all"
                       >
                         انصراف
                       </button>
@@ -455,18 +634,23 @@ export default function App() {
                 </form>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-right">
-                  <thead className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 font-medium">کد کالا</th>
-                      <th className="px-6 py-3 font-medium">نام کالا</th>
-                      <th className="px-6 py-3 font-medium">موجودی</th>
-                      <th className="px-6 py-3 font-medium">وضعیت</th>
-                      <th className="px-6 py-3 font-medium text-center">عملیات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-sm">
+              {/* Inventory Table List */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="p-4 bg-gray-50 border-b border-gray-200">
+                  <h4 className="font-bold text-sm text-gray-800">لیست کل کالاهای تعریف شده</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right">
+                    <thead className="bg-gray-50 text-gray-600 text-xs border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 font-medium">کد کالا</th>
+                        <th className="px-6 py-3 font-medium">نام کالا</th>
+                        <th className="px-6 py-3 font-medium">موجودی</th>
+                        <th className="px-6 py-3 font-medium">وضعیت</th>
+                        <th className="px-6 py-3 font-medium text-center">عملیات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
                     {state?.inventory && state.inventory.length > 0 ? (
                       state.inventory.map((item, idx) => (
                         <tr key={idx} className="hover:bg-gray-50 transition-colors">
@@ -510,7 +694,8 @@ export default function App() {
                 </table>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {activeTab === 'customers' && (
             <div className="p-0">
@@ -558,113 +743,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'deploy' && (
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4 text-blue-800">آموزش گام‌به‌گام رفع پیام «It works! NodeJS» و اجرای نهایی ربات در سی‌پنل (cPanel)</h2>
-              
-              <div className="prose prose-blue max-w-none text-gray-700 text-sm leading-relaxed space-y-4">
-                {/* دانلود فایل زیپ بیلد مستقیم مخصوص هاست اشتراکی */}
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-5 rounded-xl shadow-md border border-teal-400 mb-6 relative overflow-hidden">
-                  <div className="relative z-10">
-                    <h3 className="font-bold text-lg mb-2 flex items-center gap-2 text-white">
-                      🚀 راه حل طلایی برای هاست ۱ گیگابایتی (بدون نیاز به نصب پکیج یا بیلد گرفتن روی هاست!)
-                    </h3>
-                    <p className="text-sm opacity-90 leading-relaxed">
-                      به علت محدودیت شدید رم (RAM) در هاست‌های اشتراکی سی‌پنل، اجرای کدهای بیلد یا نصب سنگین پکیج‌ها با خطای <code className="bg-teal-700 px-1.5 py-0.5 rounded text-white font-mono text-xs font-bold">Out of memory</code> مواجه می‌شود.
-                      <br />
-                      ما برای شما کل پروژه را <strong>همینجا در سرورهای قدرتمند AI Studio کامپایل و تمام وابستگی‌ها (حتی کتابخانه Telegraf و اکسل) را در یک تک‌فایل مستقل باندل کرده‌ایم!</strong> یعنی شما به هیچ وجه نیازی ندارید روی هاست دکمه Run NPM Install یا Run Build بزنید!
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <a 
-                        href="/api/download-deploy" 
-                        download
-                        className="bg-white text-teal-800 hover:bg-teal-50 transition-all font-bold px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 text-sm inline-flex items-center"
-                      >
-                        📥 دانلود فایل زیپ آماده هاست (cpanel-deploy.zip)
-                      </a>
-                    </div>
-                  </div>
-                  <div className="absolute right-[-20px] bottom-[-25px] opacity-10 pointer-events-none">
-                    <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
-                  </div>
-                </div>
 
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg">
-                  <h3 className="font-bold text-sm mb-1 flex items-center gap-2">⚠️ چرا پیام «It works! NodeJS» را می‌بینید؟</h3>
-                  <p className="text-xs">
-                    وقتی شما در سی‌پنل یک برنامه NodeJS ایجاد می‌کنید، خود سی‌پنل یک فایل پیش‌فرض به نام <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">app.js</code> در ریشه پوشه می‌سازد که آن صفحه تست آبی‌رنگ را نشان می‌دهد. 
-                    همچنین، وب‌سرور هاست شما (Phusion Passenger) این صفحه را کش می‌کند. برای بالا آمدن سیستم واقعی، باید فایل جدید ما جایگزین آن شده و برنامه ری‌استارت شود.
-                  </p>
-                </div>
-
-                <h3 className="text-md font-bold mt-6 text-gray-900 border-b pb-1">مراحل ۳ دقیقه‌ای و فوق‌العاده مطمئن برای اجرا:</h3>
-                
-                <div className="space-y-4">
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۱</span>
-                    <div>
-                      <h4 className="font-bold text-gray-900">دانلود کدهای خروجی (Build) از منو بالا:</h4>
-                      <p className="text-gray-600">ابتدا از منوی سمت راست بالای همین صفحه (Settings یا آیکون چرخ‌دنده)، روی گزینه <strong>Export to ZIP</strong> کلیک کرده و فایل زیپ پروژه دانلودشده جدید را روی سیستم خود ذخیره کنید. (ما در این نسخه فایل‌های کمکی <code className="bg-gray-100 px-1 rounded font-mono">app.js</code> و <code className="bg-gray-100 px-1 rounded font-mono">index.js</code> را در ریشه قرار داده‌ایم تا همه‌چیز خودکار لود شود).</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۲</span>
-                    <div>
-                      <h4 className="font-bold text-gray-900">تنظیمات در Setup Node.js App سی‌پنل:</h4>
-                      <p className="text-gray-600">وارد سی‌پنل شوید، بخش <strong>Setup Node.js App</strong> را باز کنید و روی نام برنامه‌ی خود کلیک کنید تا وارد تنظیمات شوید:</p>
-                      <ul className="list-disc list-outside ms-6 mt-2 space-y-1 text-gray-600">
-                        <li><strong>Application root:</strong> این فیلد را به هیچ وجه تغییر ندهید (مثلاً همان <code className="bg-gray-100 px-1 rounded">my-bot</code> بگذارید).</li>
-                        <li><strong>Application startup file:</strong> این فیلد را می‌توانید روی <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">app.js</code> یا <code className="bg-gray-100 px-1.5 py-0.5 text-blue-600 rounded font-mono">dist/server.cjs</code> بگذارید. فرقی نمی‌کند چون ما هر دو حالت را برایتان هوشمندانه پیاده کرده‌ایم!</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۳</span>
-                    <div>
-                      <h4 className="font-bold text-gray-900">آپلود و استخراج فایل‌ها در File Manager (بسیار مهم):</h4>
-                      <p className="text-gray-600">وارد <strong>File Manager</strong> در سی‌پنل شوید. وارد پوشه‌ای که در ریشه هاست شما ساخته شده (مثلاً <code className="bg-gray-100 px-1 rounded font-mono">my-bot</code>) شوید.</p>
-                      <p className="text-amber-800 font-semibold mb-2">💡 بسیار مهم: تمام فایل‌های قبلی (خصوصاً فایل‌های مربوط به پروژه قبلی یا فایل تست <code className="bg-gray-100 px-1 rounded font-mono text-gray-900">app.js</code> قدیمی) را از این پوشه کاملاً پاک کنید تا پوشه کاملاً خالی شود.</p>
-                      <p className="text-gray-600">حالا فایل زیپ دانلود شده از طریق دکمه <strong>Export to ZIP</strong> را در این پوشه آپلود و <strong>Extract</strong> کنید.</p>
-                      <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded mt-2">
-                        <p className="text-xs font-bold">⚠️ توجه ویژه هنگام استخراج (Extract):</p>
-                        <p className="text-xs mt-1">
-                          اگر پس از استخراج، فایل‌ها در یک زیرپوشه (مثلاً به نام <code className="bg-blue-100 px-1 rounded font-mono">react-example</code> یا نامی مشابه) قرار گرفتند، 
-                          <strong>باید حتماً وارد آن زیرپوشه شوید، همه فایل‌ها و فولدرها (مخصوصاً پوشه <code className="bg-blue-100 px-1 rounded font-mono">dist</code>، فایل‌های <code className="bg-blue-100 px-1 rounded font-mono">app.js</code>، <code className="bg-blue-100 px-1 rounded font-mono">index.js</code> و <code className="bg-blue-100 px-1 rounded font-mono">package.json</code>) را انتخاب کرده، دکمه Move را بزنید و مسیر انتقال را مستقیماً به پوشه اصلی برنامه یعنی <code className="bg-blue-100 px-1 rounded font-mono">/my-bot</code> تغییر دهید.</strong>
-                          هیچ فایلی نباید داخل زیرپوشه بماند؛ همه‌چیز باید مستقیماً در پوشه‌ی ریشه <code className="bg-blue-100 px-1 rounded font-mono">my-bot</code> قرار بگیرند.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۴</span>
-                    <div>
-                      <h4 className="font-bold text-gray-900">پاکسازی کش و ری‌استارت برنامه:</h4>
-                      <p className="text-gray-600">پس از آپلود و استخراج فایل‌ها، دوباره به بخش <strong>Setup Node.js App</strong> در سی‌پنل بروید.</p>
-                      <p className="text-gray-600">در بالای صفحه، روی دکمه‌ی چرخشی و نارنجی‌رنگ <strong>Restart</strong> (یا دکمه‌ی قرمز رنگ Stop App و سپس Start App) کلیک کنید.</p>
-                      <p className="text-green-700 font-bold mt-1">این کار باعث می‌شود وب‌سرور فایل تست قدیمی را فراموش کرده و ربات پرقدرت شما را بالا بیاورد!</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 items-start">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">۵</span>
-                    <div>
-                      <h4 className="font-bold text-gray-900">ورود و تنظیمات آسان:</h4>
-                      <p className="text-gray-600">حالا آدرس و دامنه را باز کنید؛ بلافاصله پنل مدیریت زیبای ربات شما لود می‌شود! به تب <strong>تنظیمات ربات</strong> بروید، توکن ربات تلگرام و آیدی عددی ادمین خود را وارد کرده و دکمه ذخیره را بزنید. کار تمام است!</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 p-4 bg-teal-50 border border-teal-200 rounded-lg">
-                  <h4 className="font-bold flex items-center gap-2 mb-2 text-teal-900"><Info size={18}/> ویژگی‌های فوق العاده‌ی پنل و ربات شما</h4>
-                  <p className="text-gray-700">۱. <strong>بای‌پس محدودیت فضا (Disk Quota):</strong> پورتفولیوی کدهای شما بهینه‌سازی و باندل شده است، یعنی نیازی به اجرای "NPM Install" سنگین روی هاست ندارید!</p>
-                  <p className="text-gray-700 mt-1">۲. <strong>دانلود نمونه اکسل آماده:</strong> در بالای بخش کالاها دکمه دانلود نمونه فراهم شد. می‌توانید کالاها را با اکسل یا به صورت کلاً دستی/پنلی بدون اکسل مدیریت کنید.</p>
-                </div>
-              </div>
-            </div>
-          )}
 
         </div>
       </main>

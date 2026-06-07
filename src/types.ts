@@ -7,6 +7,11 @@ export interface InventoryItem {
 export interface BotConfig {
   token: string;
   adminId: string;
+  groupId?: string;
+  customerMessage?: string;
+  groupAccess?: 'all' | 'admin' | 'group_admins';
+  botEnabled?: boolean;
+  disableCustomerPm?: boolean;
 }
 
 export interface CustomerRequest {
@@ -19,10 +24,18 @@ export interface CustomerRequest {
   date: string;
 }
 
+export interface DetectedGroup {
+  id: string;
+  title: string;
+  username?: string;
+  lastActive: string;
+}
+
 export interface AppState {
   config: BotConfig;
   inventory: InventoryItem[];
   customers: CustomerRequest[];
   isRunning: boolean;
+  groups?: DetectedGroup[];
 }
 
